@@ -3,5 +3,13 @@
   roles:
     - name: ../roles/test
   tags:
-    - test
     - always
+    - test
+
+- name: Juice Shop
+  hosts: all
+  roles:
+    - name: ../roles/juiceShop
+  tags:
+    - always
+    - juiceShop

@@ -1,0 +1,10 @@
+- debug:
+    msg: "Juice Shop"
+
+- name: Create a Juice shop container
+  community.docker.docker_container:
+    name: JuiceShop
+    image: bkimminich/juice-shop
+    state: started
+    ports:
+     - "3001:3000"
