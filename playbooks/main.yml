@@ -1,0 +1,7 @@
+- name: test ansible
+  hosts: all
+  roles:
+    - name: ../roles/test
+  tags:
+    - test
+    - always
