@@ -1,11 +1,11 @@
 ---
-- name: "Create {{ ctfd.path_data }} directory"
+- name: "create {{ ctfd.path_data }} directory"
   file:
     path: "{{ ctfd.path_data }}"
     state: directory
     recurse: true
 
-- name: "Create {{ ctfd.path_data }}/data directory"
+- name: "create {{ ctfd.path_data }}/data directory"
   file:
     path: "{{ ctfd.path_data }}/data"
     state: directory
@@ -22,78 +22,106 @@
 #     path: "{{ ctfd.path_data }}/.ctfd_secret_key"
 #     state: touch
 
-- name: "Copy ctfd's config.ini"
+- name: "copy ctfd's config.ini"
   template:
     src: config.ini.j2
     dest: "{{ ctfd.path_data }}/config.ini"
 
-- name: Clone CTFd
+- name: clone CTFd
   git:
     repo: 'https://github.com/CTFd/CTFd.git'
     dest: '{{ ctfd.path_data }}/sources'
     version: 'master'
+    force: yes # to be removed but hey...
   register: _Git_clone_output
   tags:
     - git-clone
 
-- name: "Copy ctfd's config.ini"
+- name: "copy ctfd's config.ini"
   template:
     src: config.ini.j2
     dest: "{{ ctfd.path_data }}/sources/CTFd/config.ini"
 
-- name: deploy CTFd
-  community.docker.docker_compose:
-    project_name: ctfd
-    definition:
-      version: '2'
-      services:
-        ctfd:
-          build: '{{ ctfd.path_data }}/sources'
-          ports:
-            - 8000:8000
-          # env:
-          #   - UPLOAD_FOLDER=/var/uploads
-          #   - DATABASE_URL=mysql+pymysql://ctfd:ctfd@db/ctfd
-          #   - REDIS_URL=redis://cache:6379
-          #   - WORKERS=1
-          #   - LOG_FOLDER=/var/log/CTFd
-          #   - ACCESS_LOG=-
-          #   - ERROR_LOG=-
-          #   - REVERSE_PROXY=true
-          volumes:
-            - '{{ ctfd.path_data }}/data/logs:/var/log/CTFd'
-            - '{{ ctfd.path_data }}/data/uploads:/var/uploads'
-            - '{{ ctfd.path_data }}/sources:/opt/CTFd:ro'
-          depends_on:
-            - db
-        nginx:
-          image: nginx:1.17
-          volumes:
-            - '{{ ctfd.path_data }}/sources/conf/nginx/http.conf:/etc/nginx/nginx.conf'
-          ports:
-            - 80:80
-          depends_on:
-            - ctfd
-        db:
-          image: mariadb:10.4.12
-          # env:
-          #   - MYSQL_ROOT_PASSWORD=ctfd
-          #   - MYSQL_USER=ctfd
-          #   - MYSQL_PASSWORD=ctfd
-          #   - MYSQL_DATABASE=ctfd
-          volumes:
-            - '{{ ctfd.path_data }}/data/mysql:/var/lib/mysql'
-          # This command is required to set important mariadb defaults
-          command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --wait_timeout=28800, --log-warnings=0]
-        cache:
-          image: redis:4
-          volumes:
-          - '{{ ctfd.path_data }}/data/redis:/data'
-  register: output
+- name: create ctfd_network
+  community.docker.docker_network:
+    name: ctfd_network
 
-- ansible.builtin.debug:
-    var: output
-  
+- name: build ctfd_ctfd
+  community.docker.docker_image:
+    name: epfldojo/ctfd_ctfd
+    source: build
+    build:
+      path: '{{ ctfd.path_data }}/sources'
+
+- name: deploy ctfd
+  community.docker.docker_container:
+    name: ctfd # this name is needed by nginx
+    image: epfldojo/ctfd_ctfd
+    state: started
+    restart_policy: 'unless-stopped'
+    ports:
+      - 8000:8000
+    env:
+      UPLOAD_FOLDER: var/uploads
+      DATABASE_URL: mysql+pymysql://ctfd:ctfd@db/ctfd
+      REDIS_URL: redis://cache:6379
+      WORKERS: "1"
+      LOG_FOLDER: var/log/CTFd
+      ACCESS_LOG: ""
+      ERROR_LOG: ""
+      REVERSE_PROXY: "true"
+    volumes:
+      - '{{ ctfd.path_data }}/data/logs:/var/log/CTFd'
+      - '{{ ctfd.path_data }}/data/uploads:/var/uploads'
+      - '{{ ctfd.path_data }}/sources:/opt/CTFd:ro'
+    networks:
+      - name: 'ctfd_network'
+
+- name: deploy ctfd_nginx
+  community.docker.docker_container:
+    name: ctfd_nginx
+    image: nginx:1.17
+    state: started
+    restart_policy: 'unless-stopped'
+    volumes:
+      - '{{ ctfd.path_data }}/sources/conf/nginx/http.conf:/etc/nginx/nginx.conf'
+    ports:
+      - 80:80
+    networks:
+      - name: 'ctfd_network'
+
+- name: deploy ctfd_db
+  community.docker.docker_container:
+    name: ctfd_db
+    image: mariadb:10.4.12
+    state: started
+    restart_policy: 'unless-stopped'
+    env:
+      MYSQL_ROOT_PASSWORD: ctfd
+      MYSQL_USER: ctfd
+      MYSQL_PASSWORD: ctfd
+      MYSQL_DATABASE: ctfd
+    volumes:
+      - '{{ ctfd.path_data }}/data/mysql:/var/lib/mysql'
+    # This command is required to set important mariadb defaults
+    command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --wait_timeout=28800, --log-warnings=0]
+    networks:
+      - name: 'ctfd_network'
+
+- name: deploy ctfd_cache
+  community.docker.docker_container:
+    name: ctfd_cache
+    image: redis:4
+    state: started
+    restart_policy: 'unless-stopped'
+    volumes:
+    - '{{ ctfd.path_data }}/data/redis:/data'
+    networks:
+      - name: 'ctfd_network'
+
+# This only deploy the CTFD container, without the stack that is meant for
+# production — while it is working, we might have more flexibility with the
+# full stack.
 # - name: Create the CTFd container
 #   community.docker.docker_container:
 #     name: ctfd
