@@ -3,7 +3,8 @@ ctfd:
   path_data: /srv/ctfd/data
   config:
     SECRET_KEY: 
-    DATABASE_URL: 'sqlite:////srv/ctfd.db'
+    # DATABASE_URL: 'sqlite:////srv/ctfd.db'
+    DATABASE_URL: 'mysql+pymysql://ctfd:ctfd@db/ctfd'
     REDIS_URL:
     SESSION_COOKIE_HTTPONLY:
     SESSION_COOKIE_SAMESITE:

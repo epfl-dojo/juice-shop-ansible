@@ -5,11 +5,17 @@
     state: directory
     recurse: true
 
-- name: "Create {{ ctfd.path_data }}/db directory"
+- name: "Create {{ ctfd.path_data }}/data directory"
   file:
-    path: "{{ ctfd.path_data }}/db"
+    path: "{{ ctfd.path_data }}/data"
     state: directory
     mode: '01777'
+
+# - name: "Create {{ ctfd.path_data }}/db directory"
+#   file:
+#     path: "{{ ctfd.path_data }}/db"
+#     state: directory
+#     mode: '01777'
 
 # - name: "Create .ctfd_secret_key file"
 #   file:
@@ -21,14 +27,81 @@
     src: config.ini.j2
     dest: "{{ ctfd.path_data }}/config.ini"
 
-- name: Create the CTFd container
-  community.docker.docker_container:
-    name: ctfd
-    image: ctfd/ctfd:mark-2.4.3
-    state: started
-    ports:
-      - "8001:8000"
-    volumes:
-      - /srv/ctfd/data/db/:/srv/
-      - /srv/ctfd/data/config.ini:/opt/CTFd/CTFd/config.ini
-      # - /srv/ctfd/data/.ctfd_secret_key:/opt/CTFd/CTFd/.ctfd_secret_key
+- name: Clone CTFd
+  git:
+    repo: 'https://github.com/CTFd/CTFd.git'
+    dest: '{{ ctfd.path_data }}/sources'
+    version: 'master'
+  register: _Git_clone_output
+  tags:
+    - git-clone
+
+- name: "Copy ctfd's config.ini"
+  template:
+    src: config.ini.j2
+    dest: "{{ ctfd.path_data }}/sources/CTFd/config.ini"
+
+- name: deploy CTFd
+  community.docker.docker_compose:
+    project_name: ctfd
+    definition:
+      version: '2'
+      services:
+        ctfd:
+          build: '{{ ctfd.path_data }}/sources'
+          ports:
+            - 8000:8000
+          # env:
+          #   - UPLOAD_FOLDER=/var/uploads
+          #   - DATABASE_URL=mysql+pymysql://ctfd:ctfd@db/ctfd
+          #   - REDIS_URL=redis://cache:6379
+          #   - WORKERS=1
+          #   - LOG_FOLDER=/var/log/CTFd
+          #   - ACCESS_LOG=-
+          #   - ERROR_LOG=-
+          #   - REVERSE_PROXY=true
+          volumes:
+            - '{{ ctfd.path_data }}/data/logs:/var/log/CTFd'
+            - '{{ ctfd.path_data }}/data/uploads:/var/uploads'
+            - '{{ ctfd.path_data }}/sources:/opt/CTFd:ro'
+          depends_on:
+            - db
+        nginx:
+          image: nginx:1.17
+          volumes:
+            - '{{ ctfd.path_data }}/sources/conf/nginx/http.conf:/etc/nginx/nginx.conf'
+          ports:
+            - 80:80
+          depends_on:
+            - ctfd
+        db:
+          image: mariadb:10.4.12
+          # env:
+          #   - MYSQL_ROOT_PASSWORD=ctfd
+          #   - MYSQL_USER=ctfd
+          #   - MYSQL_PASSWORD=ctfd
+          #   - MYSQL_DATABASE=ctfd
+          volumes:
+            - '{{ ctfd.path_data }}/data/mysql:/var/lib/mysql'
+          # This command is required to set important mariadb defaults
+          command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --wait_timeout=28800, --log-warnings=0]
+        cache:
+          image: redis:4
+          volumes:
+          - '{{ ctfd.path_data }}/data/redis:/data'
+  register: output
+
+- ansible.builtin.debug:
+    var: output
+  
+# - name: Create the CTFd container
+#   community.docker.docker_container:
+#     name: ctfd
+#     image: ctfd/ctfd:mark-2.4.3
+#     state: started
+#     ports:
+#       - "8001:8000"
+#     volumes:
+#       - /srv/ctfd/data/db/:/srv/
+#       - /srv/ctfd/data/config.ini:/opt/CTFd/CTFd/config.ini
+#       # - /srv/ctfd/data/.ctfd_secret_key:/opt/CTFd/CTFd/.ctfd_secret_key
