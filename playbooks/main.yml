@@ -4,3 +4,10 @@
     - name: ../roles/juiceShop
   tags:
     - juiceshop
+
+- name: CTFd
+  hosts: all
+  roles:
+    - name: ../roles/ctfd
+  tags:
+    - ctfd

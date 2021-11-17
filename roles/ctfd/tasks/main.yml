@@ -1,0 +1,34 @@
+---
+- name: "Create {{ ctfd.path_data }} directory"
+  file:
+    path: "{{ ctfd.path_data }}"
+    state: directory
+    recurse: true
+
+- name: "Create {{ ctfd.path_data }}/db directory"
+  file:
+    path: "{{ ctfd.path_data }}/db"
+    state: directory
+    mode: '01777'
+
+# - name: "Create .ctfd_secret_key file"
+#   file:
+#     path: "{{ ctfd.path_data }}/.ctfd_secret_key"
+#     state: touch
+
+- name: "Copy ctfd's config.ini"
+  template:
+    src: config.ini.j2
+    dest: "{{ ctfd.path_data }}/config.ini"
+
+- name: Create the CTFd container
+  community.docker.docker_container:
+    name: ctfd
+    image: ctfd/ctfd:mark-2.4.3
+    state: started
+    ports:
+      - "8001:8000"
+    volumes:
+      - /srv/ctfd/data/db/:/srv/
+      - /srv/ctfd/data/config.ini:/opt/CTFd/CTFd/config.ini
+      # - /srv/ctfd/data/.ctfd_secret_key:/opt/CTFd/CTFd/.ctfd_secret_key
