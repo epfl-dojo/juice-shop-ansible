@@ -1,0 +1,7 @@
+FROM bkimminich/juice-shop
+
+USER root
+# https://www.npmjs.com/package/juice-shop-ctf-cli
+RUN npm install -g juice-shop-ctf-cli
+RUN mkdir /juice-shop/exports
+USER 1001

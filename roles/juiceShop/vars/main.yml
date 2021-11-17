@@ -1,0 +1,4 @@
+juiceshop:
+  path: /srv/juiceshop
+  path_data: /srv/juiceshop/data
+  url: http://itsidevfsd0013.xaas.epfl.ch:3001

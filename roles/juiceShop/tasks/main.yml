@@ -1,10 +1,86 @@
+# This task create the needed repositories, add our Dockerfile (because we want
+# to add [juice-shop-ctf](https://www.npmjs.com/package/juice-shop-ctf-cli) in
+# the image), run the Juice Shop and generate the challenges for CTFd (See
+# https://pwning.owasp-juice.shop/part1/ctf.html).
+---
+
 - debug:
     msg: "Juice Shop"
 
-- name: Create a Juice shop container
+- name: "Create {{ juiceshop.path_data }} directory"
+  file:
+    path: "{{ juiceshop.path_data }}"
+    state: directory
+    recurse: true
+
+- name: "Create {{ juiceshop.path_data }}/exports directory"
+  file:
+    path: "{{ juiceshop.path_data }}/exports"
+    state: directory
+    mode: '01777'
+
+- name: "Copy JuiceShop Dockerfile"
+  template:
+    src: Dockerfile.j2
+    dest: "{{ juiceshop.path_data }}/Dockerfile"
+
+- name: "Copy JuiceShop-CLI config"
+  template:
+    src: config.yml.j2
+    dest: "{{ juiceshop.path_data }}/exports/config.yml"
+
+- name: "Build epfldojo/juice-shop image"
+  community.docker.docker_image:
+    build:
+      path: "{{ juiceshop.path_data }}"
+    name: epfldojo/juice-shop
+    source: build
+
+- name: "Create a Juice shop container"
   community.docker.docker_container:
     name: JuiceShop
-    image: bkimminich/juice-shop
+    image: "epfldojo/juice-shop"
     state: started
     ports:
-     - "3001:3000"
+      - "3001:3000"
+    volumes:
+      - "{{ juiceshop.path_data }}/exports:/juice-shop/exports"
+    env:
+      NODE_ENV: "ctf"
+      # - CTF_KEY: "xxxx"
+
+# /juice-shop # juice-shop-ctf --config export/config.yml --output export/challenges.zip
+- name: "Export the challenges file to {{ juiceshop.path_data }}/exports/juice-shop-challenges.zip"
+  community.docker.docker_container_exec:
+    container: JuiceShop
+    command: /bin/sh -c "juice-shop-ctf --config exports/config.yml --output exports/juice-shop-challenges.zip"
+    chdir: /juice-shop
+  register: result
+  tags:
+    - never
+    - juiceshop.exportchallenge
+
+# - name: Print stdout
+#   debug:
+#     var: result.stdout
+#   tags:
+#     - juiceshop.exportchallenge
+
+- name: "Create {{ juiceshop.path_data }} directory"
+  file:
+    path: "{{ juiceshop.path_data }}/exports/juice-shop-challenges.zip"
+    state: file
+    mode: '0777'
+  tags:
+    - never
+    - juiceshop.exportchallenge
+
+- name: ansible copy file from remote to local.
+  ansible.builtin.fetch:
+    src: "{{ juiceshop.path_data }}/exports/juice-shop-challenges.zip"
+    dest: "{{ playbook_dir }}/../"
+    flat: yes
+  tags:
+    - never
+    - juiceshop.exportchallenge
+    - juiceshop.fetch

@@ -1,15 +1,6 @@
-- name: test ansible
-  hosts: all
-  roles:
-    - name: ../roles/test
-  tags:
-    - always
-    - test
-
 - name: Juice Shop
   hosts: all
   roles:
     - name: ../roles/juiceShop
   tags:
-    - always
-    - juiceShop
+    - juiceshop
