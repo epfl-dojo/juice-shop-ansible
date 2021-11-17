@@ -1,20 +1,18 @@
 #!/bin/bash
 #
-# This is a wrapper around ansible / ansible-playbook.
+# This is a wrapper around ansible / ansible-playbook that uses the
+# [Ansible Suitecase](https://github.com/epfl-si/ansible.suitecase).
 #
 # Usage ("ansible" mode):
-#
-#   ./ansible/gosible -m raw all -a 'date'
+#   ./ansible/juicyble -m raw all -a 'date'
 #
 # Usage ("ansible-playbook" mode):
-#
-#   ./ansible/gosible -l prod
-#
+#   ./ansible/juicyble
 #
 # If you are unfamiliar with Ansible, read up on it at
 # - https://www.ansible.com/overview/how-ansible-works
 # - https://github.com/jdauphant/awesome-ansible
-
+#
 
 cd "$(dirname "$0")"; cd "$(/bin/pwd)"
 
@@ -22,7 +20,6 @@ git_current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 case "$git_current_branch" in
     "") : ;;
     *) playbook_flags="$playbook_flags -e git_current_branch=$git_current_branch" ;;
-    # *) playbook_flags="$playbook_flags -e @vars/main.yml -e git_current_branch=$git_current_branch" ;;
 esac
 
 warn () {
@@ -44,7 +41,7 @@ platform_check () {
             SUITCASE_DIR=$PWD/ansible-deps-cache \
             SUITCASE_PIP_EXTRA="bcrypt passlib" \
             SUITCASE_ANSIBLE_REQUIREMENTS=requirements.yml \
-            SUITCASE_ANSIBLE_VERSION=3.1 \
+            SUITCASE_ANSIBLE_VERSION=3.4 \
             SUITCASE_PYTHON_VERSIONS="3.8.5 3.8.2 3.8.9 3.8.10" \
             bash -x
     fi
@@ -58,7 +55,6 @@ inventories () {
         dev) echo "-i inventory/hosts.yml"  ;;
         *) fatal "Invalid inventory_mode" ;;
     esac
-
 }
 
 ###########################################################################
@@ -67,7 +63,7 @@ mode=ansible-playbook
 
 declare -a ansible_args
 while [ "$#" -gt 0 ]; do
-  case "$1" in
+    case "$1" in
         -m) mode=ansible
             ansible_args+=("-m")
             shift ;;
