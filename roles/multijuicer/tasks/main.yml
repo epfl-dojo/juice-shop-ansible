@@ -1,0 +1,80 @@
+# https://docs.ansible.com/ansible/latest/collections/community/kubernetes/helm_module.html
+---
+  
+- name: install some python pkg needed by helm_repository
+  apt:
+    package:
+    - python3-setuptools
+    - python3-pip
+    - python3-yaml
+  tags:
+    - multijuicer
+
+- name: pip install openshift
+  pip:
+    name:
+      - openshift
+    executable: pip3
+  tags:
+    - multijuicer
+
+# helm repo add multi-juicer https://iteratec.github.io/multi-juicer/
+- name: Add multi-juicer repo
+  community.kubernetes.helm_repository:
+    name: multi-juicer
+    repo_url: "https://iteratec.github.io/multi-juicer/"
+  tags:
+    - multijuicer
+
+# helm install multi-juicer multi-juicer/multi-juicer
+- name: Deploy latest version of multi-juicer chart
+  community.kubernetes.helm:
+    name: multi-juicer
+    chart_ref: multi-juicer/multi-juicer
+    release_namespace: default
+    # create_namespace: true
+  tags:
+    - multijuicer
+
+
+
+- name: create the multi-juicer-loadbalancer k8s service object
+  community.kubernetes.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: multi-juicer-loadbalancer
+        namespace: default
+      spec:
+        selector:
+          app.kubernetes.io/instance: multi-juicer
+          app.kubernetes.io/name: multi-juicer
+        ports:
+        - name: http
+          protocol: TCP
+          port: 80
+          targetPort: 3000
+
+- name: create the multi-juicer-ingress k8s ingress object
+  community.kubernetes.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: multi-juicer-ingress
+        namespace: default
+      spec:
+        rules:
+        - host: "fsdjuicer.86.119.30.243.nip.io"
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: multi-juicer-loadbalancer
+                    port: 
+                      number: 80
